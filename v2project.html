@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task vocali per Google Calendar</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#F1F0F6;
+    --surface:#FFFFFF;
+    --surface-2:#E9E7F5;
+    --ink:#211F2E;
+    --ink-dim:#65627A;
+    --accent:#5B4FE0;
+    --accent-dark:#4239B8;
+    --accent-soft:#EAE8FB;
+    --success:#2F9E5B;
+    --success-soft:#E4F5EB;
+    --danger:#D14343;
+    --danger-soft:#FBEAEA;
+    --line:#DEDCEA;
+    --font-head:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-body:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); min-height:100vh; padding:20px 16px 48px;
+  }
+  .wrap{max-width:520px; margin:0 auto;}
+  header{margin-bottom:20px;}
+  header h1{font-family:var(--font-head); font-size:21px; font-weight:800; margin:0 0 4px; letter-spacing:-0.01em;}
+  header p{margin:0; font-size:13.5px; color:var(--ink-dim); line-height:1.5;}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:16px;}
+  .card h2{font-family:var(--font-head); font-size:14px; font-weight:700; margin:0 0 10px; color:var(--ink);}
+  .card p.hint{font-size:12.5px; color:var(--ink-dim); margin:0 0 12px; line-height:1.5;}
+
+  input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:11px 12px; font-family:var(--font-body); font-size:14.5px; color:var(--ink); margin-bottom:10px;
+  }
+  textarea{min-height:56px; resize:vertical;}
+  label{display:block; font-size:12.5px; color:var(--ink-dim); margin-bottom:4px; font-weight:600;}
+  .field{margin-bottom:12px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  input:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  .mic-row{display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:14px;}
+  .mic-btn{
+    width:64px; height:64px; border-radius:50%; border:none; background:var(--accent); color:#fff;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;
+  }
+  .mic-btn.listening{background:var(--danger);}
+  .mic-ring{position:absolute; inset:-7px; border-radius:50%; border:2px solid var(--danger); opacity:0; pointer-events:none;}
+  @media (prefers-reduced-motion: no-preference){
+    .mic-btn.listening .mic-ring{ animation: pulse-ring 1.4s ease-out infinite; }
+  }
+  @keyframes pulse-ring{0%{opacity:.55; transform:scale(.9);} 100%{opacity:0; transform:scale(1.35);}}
+  .mic-hint{font-size:12px; color:var(--ink-dim);}
+
+  button.primary, button.secondary{
+    padding:12px; border-radius:10px; font-size:14px; font-weight:700;
+    font-family:var(--font-head); cursor:pointer; border:none; width:100%; margin-bottom:8px;
+  }
+  button.primary{background:var(--accent); color:#fff;}
+  button.primary:disabled{background:var(--surface-2); color:var(--ink-dim); cursor:not-allowed;}
+  button.secondary{background:none; border:1px solid var(--line); color:var(--ink);}
+  button.link-btn{background:none; border:none; color:var(--accent); font-size:12.5px; font-weight:600; cursor:pointer; padding:0;}
+
+  .status{margin-top:12px; padding:11px 13px; border-radius:10px; font-size:13.5px; line-height:1.5; display:none;}
+  .status.info{display:block; background:var(--accent-soft); color:var(--accent-dark);}
+  .status.success{display:block; background:var(--success-soft); color:var(--success);}
+  .status.error{display:block; background:var(--danger-soft); color:var(--danger);}
+
+  .events-list{list-style:none; margin:0; padding:0;}
+  .events-list li{display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:13.5px;}
+  .events-list li:last-child{border-bottom:none;}
+  .events-list .when{color:var(--ink-dim); font-size:12.5px; white-space:nowrap;}
+  .events-empty{font-size:13px; color:var(--ink-dim); padding:6px 0;}
+
+  .badge{display:inline-block; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--success-soft); color:var(--success); margin-bottom:14px;}
+  .hidden{display:none !important;}
+  .unsupported{font-size:12.5px; color:var(--ink-dim); background:var(--surface-2); border-radius:10px; padding:10px 12px; margin-bottom:12px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Task vocali per il Calendario</h1>
+    <p>Detta un impegno, controlla data e ora, e crealo direttamente sul tuo Google Calendar. Tutto gira nel browser, nessun server intermedio.</p>
+  </header>
+
+  <div class="card" id="setup-card">
+    <h2>Configurazione (una tantum)</h2>
+    <p class="hint">Incolla qui il Client ID OAuth creato su Google Cloud Console (finisce con <code>.apps.googleusercontent.com</code>).</p>
+    <input type="text" id="client-id-input" placeholder="xxxxxxxxxxxx.apps.googleusercontent.com">
+    <button class="primary" id="save-client-id">Salva configurazione</button>
+    <div class="status" id="setup-status"></div>
+  </div>
+
+  <div class="card hidden" id="auth-card">
+    <h2>Accesso</h2>
+    <div id="auth-signed-out">
+      <p class="hint">Accedi con l'account Google del calendario su cui vuoi creare gli impegni.</p>
+      <button class="primary" id="signin-btn">Accedi con Google</button>
+    </div>
+    <div id="auth-signed-in" class="hidden">
+      <span class="badge">Connesso a Google Calendar</span>
+      <br>
+      <button class="link-btn" id="signout-btn">Disconnetti</button>
+    </div>
+    <div class="status" id="auth-status"></div>
+  </div>
+
+  <div class="card hidden" id="task-card">
+    <h2>Aggiungi un impegno</h2>
+    <div id="unsupported-note" class="unsupported hidden"></div>
+    <div class="mic-row">
+      <button class="mic-btn" id="mic-btn" aria-label="Avvia registrazione vocale">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8" y1="22" x2="16" y2="22"/>
+        </svg>
+        <span class="mic-ring" id="mic-ring"></span>
+      </button>
+      <div class="mic-hint" id="mic-hint">Tocca per parlare</div>
+    </div>
+    <textarea id="task-text" placeholder="Es. Prenota il dentista venerdì alle 15"></textarea>
+    <button class="secondary" id="parse-btn">Compila i campi da questo testo</button>
+
+    <div class="field">
+      <label for="title-input">Titolo</label>
+      <input type="text" id="title-input" placeholder="Titolo dell'evento">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="date-input">Data</label>
+        <input type="date" id="date-input">
+      </div>
+      <div class="field">
+        <label for="time-input">Ora (vuoto = tutto il giorno)</label>
+        <input type="time" id="time-input">
+      </div>
+    </div>
+    <div class="field">
+      <label for="duration-input">Durata (minuti, se hai messo un'ora)</label>
+      <input type="number" id="duration-input" value="60" min="5" step="5">
+    </div>
+    <button class="primary" id="create-btn">Crea evento</button>
+    <div class="status" id="create-status"></div>
+  </div>
+
+  <div class="card hidden" id="events-card">
+    <h2>Prossimi eventi</h2>
+    <ul class="events-list" id="events-list"></ul>
+    <div class="events-empty hidden" id="events-empty">Nessun evento imminente trovato.</div>
+    <button class="link-btn" id="refresh-btn">Aggiorna elenco</button>
+  </div>
+</div>
+
+<script>
+// ---------- Elements ----------
+const setupCard = document.getElementById('setup-card');
+const clientIdInput = document.getElementById('client-id-input');
+const saveClientIdBtn = document.getElementById('save-client-id');
+const setupStatus = document.getElementById('setup-status');
+
+const authCard = document.getElementById('auth-card');
+const authSignedOut = document.getElementById('auth-signed-out');
+const authSignedIn = document.getElementById('auth-signed-in');
+const signinBtn = document.getElementById('signin-btn');
+const signoutBtn = document.getElementById('signout-btn');
+const authStatus = document.getElementById('auth-status');
+
+const taskCard = document.getElementById('task-card');
+const eventsCard = document.getElementById('events-card');
+
+const textEl = document.getElementById('task-text');
+const micBtn = document.getElementById('mic-btn');
+const micHint = document.getElementById('mic-hint');
+const unsupportedNote = document.getElementById('unsupported-note');
+const parseBtn = document.getElementById('parse-btn');
+
+const titleInput = document.getElementById('title-input');
+const dateInput = document.getElementById('date-input');
+const timeInput = document.getElementById('time-input');
+const durationInput = document.getElementById('duration-input');
+const createBtn = document.getElementById('create-btn');
+const createStatus = document.getElementById('create-status');
+
+const eventsList = document.getElementById('events-list');
+const eventsEmpty = document.getElementById('events-empty');
+const refreshBtn = document.getElementById('refresh-btn');
+
+// ---------- Config & auth state ----------
+let CLIENT_ID = localStorage.getItem('gcal_client_id') || '';
+let accessToken = null;
+let tokenClient = null;
+
+function setStatus(el, kind, text){
+  el.className = 'status ' + kind;
+  el.textContent = text;
+}
+function clearStatus(el){
+  el.className = 'status';
+  el.textContent = '';
+}
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+dateInput.value = todayISO();
+
+// ---------- Setup (Client ID) ----------
+function refreshSetupUI(){
+  if (CLIENT_ID) {
+    clientIdInput.value = CLIENT_ID;
+    authCard.classList.remove('hidden');
+    initGis();
+  } else {
+    authCard.classList.add('hidden');
+  }
+}
+
+saveClientIdBtn.addEventListener('click', () => {
+  const val = clientIdInput.value.trim();
+  if (!val.endsWith('.apps.googleusercontent.com')) {
+    setStatus(setupStatus, 'error', 'Non sembra un Client ID valido: deve finire con .apps.googleusercontent.com');
+    return;
+  }
+  CLIENT_ID = val;
+  localStorage.setItem('gcal_client_id', CLIENT_ID);
+  setStatus(setupStatus, 'success', 'Configurazione salvata.');
+  refreshSetupUI();
+});
+
+// ---------- Google Identity Services ----------
+function initGis(){
+  if (!window.google || !google.accounts || !google.accounts.oauth2) {
+    // library not loaded yet, retry shortly
+    setTimeout(initGis, 300);
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/calendar.events',
+    callback: (resp) => {
+      if (resp.error) {
+        setStatus(authStatus, 'error', 'Accesso negato o annullato.');
+        return;
+      }
+      accessToken = resp.access_token;
+      onSignedIn();
+    }
+  });
+}
+
+function onSignedIn(){
+  authSignedOut.classList.add('hidden');
+  authSignedIn.classList.remove('hidden');
+  clearStatus(authStatus);
+  taskCard.classList.remove('hidden');
+  eventsCard.classList.remove('hidden');
+  refreshEvents();
+}
+
+function onSignedOut(){
+  accessToken = null;
+  authSignedOut.classList.remove('hidden');
+  authSignedIn.classList.add('hidden');
+  taskCard.classList.add('hidden');
+  eventsCard.classList.add('hidden');
+}
+
+signinBtn.addEventListener('click', () => {
+  if (!tokenClient) { setStatus(authStatus, 'error', 'Configurazione mancante.'); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+});
+
+signoutBtn.addEventListener('click', () => {
+  if (accessToken && window.google) {
+    google.accounts.oauth2.revoke(accessToken, () => {});
+  }
+  onSignedOut();
+});
+
+// ---------- Speech recognition ----------
+const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+let isListening = false;
+let recognition = null;
+
+if (!SpeechRecognitionImpl) {
+  unsupportedNote.textContent = 'Il riconoscimento vocale non è disponibile in questo browser. Scrivi il testo qui sotto, oppure usa il microfono della tastiera del telefono.';
+  unsupportedNote.classList.remove('hidden');
+  micBtn.classList.add('hidden');
+  micHint.classList.add('hidden');
+} else {
+  recognition = new SpeechRecognitionImpl();
+  recognition.lang = 'it-IT';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onresult = (event) => {
+    let finalT = '', interimT = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const chunk = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalT += chunk; else interimT += chunk;
+    }
+    textEl.value = (finalT || interimT).trim();
+  };
+  recognition.onerror = (event) => {
+    isListening = false;
+    micBtn.classList.remove('listening');
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      micHint.textContent = 'Permesso microfono negato: scrivi il testo qui sotto.';
+    } else if (event.error === 'no-speech') {
+      micHint.textContent = 'Non ho sentito nulla, riprova.';
+    } else {
+      micHint.textContent = 'Riconoscimento non riuscito, riprova o scrivi il testo.';
+    }
+  };
+  recognition.onend = () => {
+    isListening = false;
+    micBtn.classList.remove('listening');
+    micHint.textContent = 'Tocca per parlare';
+  };
+  micBtn.addEventListener('click', () => {
+    if (isListening) { recognition.stop(); return; }
+    textEl.value = '';
+    try {
+      recognition.start();
+      isListening = true;
+      micBtn.classList.add('listening');
+      micHint.textContent = 'Ti ascolto... tocca di nuovo per fermarti';
+    } catch (e) {
+      micHint.textContent = 'Impossibile avviare il microfono.';
+    }
+  });
+}
+
+// ---------- Lightweight Italian date/time parsing ----------
+function stripAccents(s){ return s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+
+function parseItalianDateTime(text){
+  const lower = stripAccents(text.toLowerCase());
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let timeStr = '';
+
+  if (/\bdopodomani\b/.test(lower)) {
+    date.setDate(date.getDate() + 2);
+  } else if (/\bdomani\b/.test(lower)) {
+    date.setDate(date.getDate() + 1);
+  } else if (!/\boggi\b/.test(lower)) {
+    const days = ['domenica','lunedi','martedi','mercoledi','giovedi','venerdi','sabato'];
+    for (let i = 0; i < days.length; i++) {
+      if (new RegExp('\\b' + days[i] + '\\b').test(lower)) {
+        let diff = (i - now.getDay() + 7) % 7;
+        if (diff === 0) diff = 7;
+        date.setDate(date.getDate() + diff);
+        break;
+      }
+    }
+  }
+
+  const timeMatch = lower.match(/\balle\s+(\d{1,2})(?:[:.](\d{2}))?/);
+  if (timeMatch) {
+    let h = parseInt(timeMatch[1], 10);
+    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    if (/pomeriggio|sera/.test(lower) && h < 12) h += 12;
+    timeStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+
+  const pad = n => String(n).padStart(2,'0');
+  const dateStr = date.getFullYear() + '-' + pad(date.getMonth()+1) + '-' + pad(date.getDate());
+  return { dateStr, timeStr };
+}
+
+function stripDateTimePhrases(text){
+  let t = text;
+  t = t.replace(/\b(oggi|domani|dopodomani)\b/gi, '');
+  t = t.replace(/\b(lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b/gi, '');
+  t = t.replace(/\balle\s+\d{1,2}([:.]\d{2})?\s*(del pomeriggio|di sera|di mattina)?/gi, '');
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  t = t.replace(/^(il|la|l')\s+/i, '').trim();
+  return t.length > 0 ? t : text;
+}
+
+parseBtn.addEventListener('click', () => {
+  const raw = textEl.value.trim();
+  if (!raw) return;
+  const { dateStr, timeStr } = parseItalianDateTime(raw);
+  dateInput.value = dateStr;
+  timeInput.value = timeStr;
+  titleInput.value = stripDateTimePhrases(raw);
+  titleInput.value = titleInput.value.charAt(0).toUpperCase() + titleInput.value.slice(1);
+});
+
+// ---------- Google Calendar REST calls ----------
+async function gcalFetch(path, options){
+  const res = await fetch('https://www.googleapis.com/calendar/v3/' + path, {
+    ...options,
+    headers: { ...(options && options.headers), 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' }
+  });
+  if (res.status === 401) throw { unauthorized: true };
+  if (!res.ok) { const body = await res.text(); throw new Error('HTTP ' + res.status + ': ' + body); }
+  return res.status === 204 ? null : await res.json();
+}
+
+function buildEventPayload(title, dateStr, timeStr, durationMin){
+  if (!timeStr) {
+    const end = new Date(dateStr + 'T00:00:00');
+    end.setDate(end.getDate() + 1);
+    const pad = n => String(n).padStart(2,'0');
+    const endStr = end.getFullYear() + '-' + pad(end.getMonth()+1) + '-' + pad(end.getDate());
+    return { summary: title, start: { date: dateStr }, end: { date: endStr } };
+  }
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const start = new Date(dateStr + 'T' + timeStr + ':00');
+  const end = new Date(start.getTime() + (parseInt(durationMin, 10) || 60) * 60000);
+  const fmt = d => {
+    const pad = n => String(n).padStart(2,'0');
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':00';
+  };
+  return { summary: title, start: { dateTime: fmt(start), timeZone: tz }, end: { dateTime: fmt(end), timeZone: tz } };
+}
+
+async function withAuthRetry(fn){
+  try {
+    return await fn();
+  } catch (e) {
+    if (e && e.unauthorized && tokenClient) {
+      await new Promise((resolve) => {
+        tokenClient.callback = (resp) => {
+          if (!resp.error) accessToken = resp.access_token;
+          resolve();
+        };
+        tokenClient.requestAccessToken({ prompt: '' });
+      });
+      return await fn();
+    }
+    throw e;
+  }
+}
+
+createBtn.addEventListener('click', async () => {
+  const title = titleInput.value.trim() || textEl.value.trim();
+  const dateStr = dateInput.value;
+  if (!title || !dateStr) {
+    setStatus(createStatus, 'error', 'Serve almeno un titolo e una data.');
+    return;
+  }
+  createBtn.disabled = true;
+  setStatus(createStatus, 'info', 'Sto creando l\u2019evento...');
+  try {
+    const payload = buildEventPayload(title, dateStr, timeInput.value, durationInput.value);
+    await withAuthRetry(() => gcalFetch('calendars/primary/events', { method: 'POST', body: JSON.stringify(payload) }));
+    const when = timeInput.value ? (dateStr + ' alle ' + timeInput.value) : (dateStr + ', tutto il giorno');
+    setStatus(createStatus, 'success', 'Creato: "' + title + '" \u2014 ' + when);
+    textEl.value = '';
+    titleInput.value = '';
+    timeInput.value = '';
+    refreshEvents();
+  } catch (e) {
+    setStatus(createStatus, 'error', 'Non sono riuscito a creare l\u2019evento. Riprova.');
+  }
+  createBtn.disabled = false;
+});
+
+async function fetchUpcoming(){
+  const timeMin = new Date().toISOString();
+  const params = new URLSearchParams({ timeMin, maxResults: '6', singleEvents: 'true', orderBy: 'startTime' });
+  const data = await withAuthRetry(() => gcalFetch('calendars/primary/events?' + params.toString(), { method: 'GET' }));
+  return (data && data.items) || [];
+}
+
+function formatWhen(ev){
+  if (ev.start.date) return 'tutto il giorno \u2014 ' + ev.start.date;
+  const d = new Date(ev.start.dateTime);
+  return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function refreshEvents(){
+  refreshBtn.disabled = true;
+  try {
+    const items = await fetchUpcoming();
+    eventsList.innerHTML = '';
+    if (items.length === 0) {
+      eventsEmpty.classList.remove('hidden');
+    } else {
+      eventsEmpty.classList.add('hidden');
+      items.forEach(ev => {
+        const li = document.createElement('li');
+        const t = document.createElement('span');
+        t.textContent = ev.summary || '(senza titolo)';
+        const w = document.createElement('span');
+        w.className = 'when';
+        w.textContent = formatWhen(ev);
+        li.appendChild(t); li.appendChild(w);
+        eventsList.appendChild(li);
+      });
+    }
+  } catch (e) {
+    eventsEmpty.classList.remove('hidden');
+    eventsEmpty.textContent = 'Errore nel recupero degli eventi.';
+  }
+  refreshBtn.disabled = false;
+}
+
+refreshBtn.addEventListener('click', refreshEvents);
+
+// ---------- Init ----------
+refreshSetupUI();
+</script>
+</body>
+</html>
